@@ -49,52 +49,33 @@ def Tz(z):
     return T
 
 
-def dRx(q):
-    T = np.array([[0, 0, 0, 0],
-                  [0, -np.sin(q), -np.cos(q), 0],
-                  [0, np.cos(q), -np.sin(q), 0],
-                  [0, 0, 0, 0]])
-    return T
+def VisualisationFK(q0, q1):
+
+    T = np.linalg.multi_dot([Rz(q0),
+                             Ty(-base_radius)])
+
+    pos1 = T[0:3, 3]
+
+    T = np.linalg.multi_dot([Rz(q0),
+                             Ty(-base_radius),
+                             Rx(q1),
+                             Ty(-rf)])
+
+    pos2 = T[0:3, 3]
+
+    return pos1, pos2
 
 
-def dRy(q):
-    T = np.array([[-np.sin(q), 0, np.cos(q), 0],
-                  [0, 0, 0, 0],
-                  [-np.cos(q), 0, -np.sin(q), 0],
-                  [0, 0, 0, 0]])
-    return T
+def VisualisationFK_ee(ee_pos, q0):
 
+    T = np.linalg.multi_dot([Tx(ee_pos[0]),
+                             Ty(ee_pos[1]),
+                             Tz(ee_pos[2]),
+                             Rz(q0),
+                             Ty(-end_platform_radius)])
 
-def dRz(q):
-    T = np.array([[-np.sin(q), -np.cos(q), 0, 0],
-                  [np.cos(q), -np.sin(q), 0, 0],
-                  [0, 0, 0, 0],
-                  [0, 0, 0, 0]])
-    return T
-
-
-def dTx(x):
-    T = np.array([[0, 0, 0, 1],
-                  [0, 0, 0, 0],
-                  [0, 0, 0, 0],
-                  [0, 0, 0, 0]])
-    return T
-
-
-def dTy(y):
-    T = np.array([[0, 0, 0, 0],
-                  [0, 0, 0, 1],
-                  [0, 0, 0, 0],
-                  [0, 0, 0, 0]])
-    return T
-
-
-def dTz(z):
-    T = np.array([[0, 0, 0, 0],
-                  [0, 0, 0, 0],
-                  [0, 0, 0, 1],
-                  [0, 0, 0, 0]])
-    return T
+    pos1 = T[0:3, 3]
+    return pos1
 
 
 re = 800  # big link
@@ -131,7 +112,7 @@ def IK(x0, y0, z0):
     theta2, elbow_pos_2 = calc_angle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
     theta3, elbow_pos_3 = calc_angle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
 
-    return [theta1, theta2, theta3], [elbow_pos_1, elbow_pos_2, elbow_pos_3]
+    return [theta1, theta2, theta3]
 
 
 #print(IK(100, 300, -500))
@@ -189,8 +170,8 @@ def FK(theta1, theta2, theta3):
 #print(FK(15, -65, -40))
 
 
-position = [0, 0, -900]
-thetas, elbows_pos = IK(position[0], position[1], position[2])
+position = [-200, -400, -505]
+thetas= IK(position[0], position[1], position[2])
 
 #print(thetas)
 
@@ -204,7 +185,9 @@ def DrawCircle(ax, pos, radius):
     ax.plot(x, y, pos[2])
 
 
-def Visualisation(ee_pos, elbows_positions):
+import math
+
+def Visualisation(ee_pos, q):
     ax = plt.axes(projection='3d')
     center = [0, 0, 0]
 
@@ -214,33 +197,45 @@ def Visualisation(ee_pos, elbows_positions):
     # Draw end-effector
     DrawCircle(ax, ee_pos, end_platform_radius)
 
-    elbow_point = elbows_positions[0]
-
-    print(elbows_positions)
+    print(q)
 
     # Sequence 1
-    x = [center[0], center[0], elbow_point[0], ee_pos[0], ee_pos[0]]
-    y = [center[1], center[1] - base_radius, elbow_point[1], ee_pos[1] - end_platform_radius, ee_pos[1]]
-    z = [center[2], center[2], elbow_point[2], ee_pos[2], ee_pos[2]]
+    pos0, pos1 = VisualisationFK(0, np.deg2rad(q[0]))
+
+    x = [center[0], pos0[0], pos1[0], ee_pos[0], ee_pos[0]]
+    y = [center[1], pos0[1], pos1[1], ee_pos[1] - end_platform_radius, ee_pos[1]]
+    z = [center[2], pos0[2], pos1[2], ee_pos[2], ee_pos[2]]
 
     ax.plot3D(x, y, z)
 
     # Sequence 2
-    elbow_point = elbows_positions[1]
+    pos0, pos1 = VisualisationFK(np.deg2rad(120), np.deg2rad(q[1]))
+    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(120))
 
-    cos120 = -0.5
-    sin120 = np.sin(np.deg2rad(120))
+    print(posEnd)
 
-    #theta2, elbow_pos_2 = calc_angle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
-
-    x = np.array([center[0], center[0], elbow_point[0], ee_pos[0], ee_pos[0]])
-    y = np.array([center[1], center[1] - base_radius, elbow_point[1], ee_pos[1] - end_platform_radius, ee_pos[1]])
-    z = [center[2], center[2], elbow_point[2], ee_pos[2], ee_pos[2]]
-
-    x = x * cos120 + y * sin120
-    y = y * cos120 - x * sin120
+    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
+    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
+    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
 
     ax.plot3D(x, y, z)
+
+    # Sequence 3
+    pos0, pos1 = VisualisationFK(np.deg2rad(-120), np.deg2rad(q[2]))
+    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(-120))
+
+    print(posEnd)
+
+    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
+    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
+    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
+
+    ax.plot3D(x, y, z)
+
+    print()
+
+    print(math.dist(pos1, pos0))
+    #print(math.dist(pos1, posEnd))
 
     ax.set_xlim(-500, 500)
     ax.set_ylim(-500, 500)
@@ -248,4 +243,4 @@ def Visualisation(ee_pos, elbows_positions):
     plt.show()
 
 
-Visualisation(position, elbows_pos)
+Visualisation(position, thetas)
