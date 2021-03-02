@@ -122,7 +122,7 @@ def FK(theta1, theta2, theta3):
 #print(FK(15, -65, -40))
 
 
-position = [-200, -400, -505]
+position = [-200, 400, -505]
 thetas= IK(position[0], position[1], position[2])
 
 #print(thetas)
@@ -164,7 +164,6 @@ def Visualisation(ee_pos, q):
     pos0, pos1 = VisualisationFK(np.deg2rad(120), np.deg2rad(q[1]))
     posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(120))
 
-    print(posEnd)
 
     x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
     y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
@@ -186,9 +185,11 @@ def Visualisation(ee_pos, q):
 
     print()
 
-    print(math.dist(pos1, pos0))
+    print("From senter to pos0 {}.".format(math.dist(center, pos0)))
+    print("From pos0 to pos1 {}.".format(math.dist(pos1, pos0)))
     #print(math.dist(pos1, posEnd))
-    print(math.dist(ee_pos, posEnd))
+    print("From pos1 to posEnd {}.".format(math.dist(pos1, posEnd)))
+    print("From posEnd to ee_pos {}.".format(math.dist(ee_pos, posEnd)))
 
     ax.set_xlim(-500, 500)
     ax.set_ylim(-500, 500)
