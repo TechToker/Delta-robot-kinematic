@@ -1,33 +1,6 @@
 import matplotlib.pyplot as plt
+import math
 from matrix import *
-
-def VisualisationFK(q0, q1):
-
-    T = np.linalg.multi_dot([Rz(q0),
-                             Ty(-base_radius)])
-
-    pos1 = T[0:3, 3]
-
-    T = np.linalg.multi_dot([Rz(q0),
-                             Ty(-base_radius),
-                             Rx(q1),
-                             Ty(-rf)])
-
-    pos2 = T[0:3, 3]
-
-    return pos1, pos2
-
-
-def VisualisationFK_ee(ee_pos, q0):
-
-    T = np.linalg.multi_dot([Tx(ee_pos[0]),
-                             Ty(ee_pos[1]),
-                             Tz(ee_pos[2]),
-                             Rz(q0),
-                             Ty(-end_platform_radius)])
-
-    pos1 = T[0:3, 3]
-    return pos1
 
 
 re = 800  # big link
@@ -35,13 +8,17 @@ rf = 300  # small link
 base_radius = 370  # radius of top platform
 end_platform_radius = 80  # radius of end-effector
 
+end_position = [-200, 400, -805]
 
-def calc_angle(x0, y0, z0):
-    y1 = -0.5 * 0.57735 * base_radius
-    y0 -= 0.5 * 0.57735 * end_platform_radius
+
+def GetActiveJointAngle(x0, y0, z0):
+    y1 = -base_radius
+    y0 -= end_platform_radius
+
     a = (x0 * x0 + y0 * y0 + z0 * z0 + rf * rf - re * re - y1 * y1) / (2 * z0)
     b = (y1 - y0) / z0
     d = -(a + b * y1) * (a + b * y1) + rf * (b * b * rf + rf)
+
     if d < 0:
         print("The point doesnt exist")
 
@@ -53,21 +30,18 @@ def calc_angle(x0, y0, z0):
     else:
         theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi
 
-    return theta, [0, -base_radius + yj, zj]
+    return theta
 
 
 def IK(x0, y0, z0):
     cos120 = -0.5
     sin120 = np.sin(np.deg2rad(120))
 
-    theta1, elbow_pos_1 = calc_angle(x0, y0, z0)
-    theta2, elbow_pos_2 = calc_angle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
-    theta3, elbow_pos_3 = calc_angle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
+    theta1 = GetActiveJointAngle(x0, y0, z0)
+    theta2 = GetActiveJointAngle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
+    theta3 = GetActiveJointAngle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
 
     return [theta1, theta2, theta3]
-
-
-#print(IK(100, 300, -500))
 
 
 def FK(theta1, theta2, theta3):
@@ -110,6 +84,7 @@ def FK(theta1, theta2, theta3):
     c = (b2 - y1 * dnm) * (b2 - y1 * dnm) + b1 * b1 + dnm * dnm * (z1 * z1 - re * re)
 
     d = b * b - 4 * a * c
+
     if (d < 0):
         print("error")
 
@@ -117,15 +92,6 @@ def FK(theta1, theta2, theta3):
     x0 = (a1 * z0 + b1) / dnm
     y0 = (a2 * z0 + b2) / dnm
     return [x0, y0, z0]
-
-
-#print(FK(15, -65, -40))
-
-
-position = [-200, 400, -505]
-thetas= IK(position[0], position[1], position[2])
-
-#print(thetas)
 
 
 def DrawCircle(ax, pos, radius):
@@ -137,59 +103,45 @@ def DrawCircle(ax, pos, radius):
     ax.plot(x, y, pos[2])
 
 
-import math
+def GetLegLinksPos(ee_pos, q0, q1):
+    link_start_pos = np.linalg.multi_dot([Rz(q0), Ty(-base_radius)])[0:3, 3]
+    elbow_pos = np.linalg.multi_dot([Rz(q0), Ty(-base_radius), Rx(q1), Ty(-rf)])[0:3, 3]
+    wrist_pos = np.linalg.multi_dot([Tx(ee_pos[0]), Ty(ee_pos[1]), Tz(ee_pos[2]), Rz(q0), Ty(-end_platform_radius)])[0:3, 3]
+
+    return link_start_pos, elbow_pos, wrist_pos
+
+
+def DrawLeg(ax, base_center, leg_start_pos, elbow_pos, wrist_pos, end_pos):
+    x = [base_center[0], leg_start_pos[0], elbow_pos[0], wrist_pos[0], end_pos[0]]
+    y = [base_center[1], leg_start_pos[1], elbow_pos[1], wrist_pos[1], end_pos[1]]
+    z = [base_center[2], leg_start_pos[2], elbow_pos[2], wrist_pos[2], end_pos[2]]
+
+    ax.plot3D(x, y, z)
+
 
 def Visualisation(ee_pos, q):
     ax = plt.axes(projection='3d')
-    center = [0, 0, 0]
+    base_center = [0, 0, 0]
 
     # Draw base
-    DrawCircle(ax, center, base_radius)
+    DrawCircle(ax, base_center, base_radius)
 
     # Draw end-effector
     DrawCircle(ax, ee_pos, end_platform_radius)
 
-    print(q)
-
     # Sequence 1
-    pos0, pos1 = VisualisationFK(0, np.deg2rad(q[0]))
-
-    x = [center[0], pos0[0], pos1[0], ee_pos[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], ee_pos[1] - end_platform_radius, ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], ee_pos[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
+    leg_start_pos, elbow_pos, wrist_pos = GetLegLinksPos(ee_pos, 0, np.deg2rad(q[0]))
+    DrawLeg(ax, base_center, leg_start_pos, elbow_pos, wrist_pos, ee_pos)
 
     # Sequence 2
-    pos0, pos1 = VisualisationFK(np.deg2rad(120), np.deg2rad(q[1]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(120))
-
-
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
+    leg_start_pos, elbow_pos, wrist_pos = GetLegLinksPos(ee_pos, np.deg2rad(120), np.deg2rad(q[1]))
+    DrawLeg(ax, base_center, leg_start_pos, elbow_pos, wrist_pos, ee_pos)
 
     # Sequence 3
-    pos0, pos1 = VisualisationFK(np.deg2rad(-120), np.deg2rad(q[2]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(-120))
+    leg_start_pos, elbow_pos, wrist_pos = GetLegLinksPos(ee_pos, np.deg2rad(-120), np.deg2rad(q[2]))
+    DrawLeg(ax, base_center, leg_start_pos, elbow_pos, wrist_pos, ee_pos)
 
-    print(posEnd)
-
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
-
-    print()
-
-    print("From senter to pos0 {}.".format(math.dist(center, pos0)))
-    print("From pos0 to pos1 {}.".format(math.dist(pos1, pos0)))
-    #print(math.dist(pos1, posEnd))
-    print("From pos1 to posEnd {}.".format(math.dist(pos1, posEnd)))
-    print("From posEnd to ee_pos {}.".format(math.dist(ee_pos, posEnd)))
+    print("RE length {}.".format(math.dist(elbow_pos, wrist_pos)))
 
     ax.set_xlim(-500, 500)
     ax.set_ylim(-500, 500)
@@ -197,4 +149,6 @@ def Visualisation(ee_pos, q):
     plt.show()
 
 
-Visualisation(position, thetas)
+thetas = IK(end_position[0], end_position[1], end_position[2])
+print(f'IK angles: {thetas}')
+Visualisation(end_position, thetas)
