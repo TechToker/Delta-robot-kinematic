@@ -1,73 +1,41 @@
+import numpy as np
 import matplotlib.pyplot as plt
-from matrix import *
-
-def VisualisationFK(q0, q1):
-
-    T = np.linalg.multi_dot([Rz(q0),
-                             Ty(-base_radius)])
-
-    pos1 = T[0:3, 3]
-
-    T = np.linalg.multi_dot([Rz(q0),
-                             Ty(-base_radius),
-                             Rx(q1),
-                             Ty(-rf)])
-
-    pos2 = T[0:3, 3]
-
-    return pos1, pos2
-
-
-def VisualisationFK_ee(ee_pos, q0):
-
-    T = np.linalg.multi_dot([Tx(ee_pos[0]),
-                             Ty(ee_pos[1]),
-                             Tz(ee_pos[2]),
-                             Rz(q0),
-                             Ty(-end_platform_radius)])
-
-    pos1 = T[0:3, 3]
-    return pos1
-
 
 re = 800  # big link
 rf = 300  # small link
-base_radius = 370  # radius of top platform
-end_platform_radius = 80  # radius of end-effector
+f = 370  # radius of top platform
+e = 80  # radius of end-effector
 
 
 def calc_angle(x0, y0, z0):
-    y1 = -0.5 * 0.57735 * base_radius
-    y0 -= 0.5 * 0.57735 * end_platform_radius
+    y1 = -0.5 * 0.57735 * f
+    y0 -= 0.5 * 0.57735 * e
     a = (x0 * x0 + y0 * y0 + z0 * z0 + rf * rf - re * re - y1 * y1) / (2 * z0)
     b = (y1 - y0) / z0
     d = -(a + b * y1) * (a + b * y1) + rf * (b * b * rf + rf)
     if d < 0:
         print("The point doesnt exist")
-
     yj = (y1 - a * b - np.sqrt(d)) / (b * b + 1)
     zj = a + b * yj
-
     if yj > y1:
         theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi + 180
     else:
         theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi
-
-    return theta, [0, -base_radius + yj, zj]
+    return theta
 
 
 def IK(x0, y0, z0):
     cos120 = -0.5
     sin120 = np.sin(np.deg2rad(120))
 
-    theta1, elbow_pos_1 = calc_angle(x0, y0, z0)
-    theta2, elbow_pos_2 = calc_angle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
-    theta3, elbow_pos_3 = calc_angle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
+    theta1 = calc_angle(x0, y0, z0)
+    theta2 = calc_angle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
+    theta3 = calc_angle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
 
     return [theta1, theta2, theta3]
 
 
-#print(IK(100, 300, -500))
+print(IK(100, 300, -500))
 
 
 def FK(theta1, theta2, theta3):
@@ -75,7 +43,7 @@ def FK(theta1, theta2, theta3):
     tan60 = np.tan(np.deg2rad(60))
     sin30 = np.sin(np.deg2rad(30))
 
-    t = (base_radius - end_platform_radius) * tan30 / 2
+    t = (f - e) * tan30 / 2
     dtr = np.pi / 180
 
     theta1 *= dtr
@@ -119,82 +87,32 @@ def FK(theta1, theta2, theta3):
     return [x0, y0, z0]
 
 
-#print(FK(15, -65, -40))
+print(FK(15, -65, -40))
 
 
-position = [-200, 400, -505]
-thetas= IK(position[0], position[1], position[2])
+position = [100, 300, -500]
+thetas = IK(position[0], position[1], position[2])
 
-#print(thetas)
+print(thetas)
 
-
-def DrawCircle(ax, pos, radius):
-    theta = np.linspace(0, 2 * np.pi, 200)
-
-    x = radius * np.sin(theta) + pos[0]
-    y = radius * np.cos(theta) + pos[1]
-
-    ax.plot(x, y, pos[2])
-
-
-import math
-
-def Visualisation(ee_pos, q):
-    ax = plt.axes(projection='3d')
+def Visualisation(ee_pos):
     center = [0, 0, 0]
 
-    # Draw base
-    DrawCircle(ax, center, base_radius)
+    base_len = f/2
+    ee_base_len = e/2
 
-    # Draw end-effector
-    DrawCircle(ax, ee_pos, end_platform_radius)
+    x = [center[0], center[0] + base_len, ee_pos[0] - ee_base_len, ee_pos[0]]
+    y = [center[1], center[1], ee_pos[1], ee_pos[1]]
+    z = [center[2], center[2], ee_pos[2], ee_pos[2]]
 
-    print(q)
+    ax = plt.axes(projection='3d')
 
-    # Sequence 1
-    pos0, pos1 = VisualisationFK(0, np.deg2rad(q[0]))
-
-    x = [center[0], pos0[0], pos1[0], ee_pos[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], ee_pos[1] - end_platform_radius, ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], ee_pos[2], ee_pos[2]]
+    # ax.set_xlim(-0.5, 0.5)
+    # ax.set_ylim(-0.5, 0.5)
+    # ax.set_zlim(0, 1)
 
     ax.plot3D(x, y, z)
-
-    # Sequence 2
-    pos0, pos1 = VisualisationFK(np.deg2rad(120), np.deg2rad(q[1]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(120))
-
-
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
-
-    # Sequence 3
-    pos0, pos1 = VisualisationFK(np.deg2rad(-120), np.deg2rad(q[2]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(-120))
-
-    print(posEnd)
-
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
-
-    print()
-
-    print("From senter to pos0 {}.".format(math.dist(center, pos0)))
-    print("From pos0 to pos1 {}.".format(math.dist(pos1, pos0)))
-    #print(math.dist(pos1, posEnd))
-    print("From pos1 to posEnd {}.".format(math.dist(pos1, posEnd)))
-    print("From posEnd to ee_pos {}.".format(math.dist(ee_pos, posEnd)))
-
-    ax.set_xlim(-500, 500)
-    ax.set_ylim(-500, 500)
-    ax.set_zlim(-1000, 0)
     plt.show()
 
 
-Visualisation(position, thetas)
+Visualisation(position)
