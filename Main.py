@@ -152,3 +152,54 @@ def Visualisation(ee_pos, q):
 thetas = IK(end_position[0], end_position[1], end_position[2])
 print(f'IK angles: {thetas}')
 Visualisation(end_position, thetas)
+
+
+####
+space = [[0.1, 0.9], [0.1, 0.9], [0.1, 0.9]]
+points_per_axis = 10
+
+
+def CalculateDeflections():
+    x_pos = []
+    y_pos = []
+    z_pos = []
+    deflections = []
+
+    x_linSpace = np.linspace(space[0][0], space[0][1], points_per_axis)
+    y_linSpace = np.linspace(space[1][0], space[1][1], points_per_axis)
+    z_linSpace = np.linspace(space[2][0], space[2][1], points_per_axis)
+
+    for x in x_linSpace:
+        for y in y_linSpace:
+            for z in z_linSpace:
+
+                deflection = x + y + z
+
+                x_pos.append(x)
+                y_pos.append(y)
+                z_pos.append(z)
+                deflections.append(deflection)
+
+    return np.array(x_pos), np.array(y_pos), np.array(z_pos), np.array(deflections)
+
+
+def plotDeflectionMap(x_pos, y_pos, z_pos, deflection, colormap, s):
+    plt.figure()
+    ax = plt.axes(projection='3d')
+
+    ax.set_xlim3d(space[0][0], space[0][1])
+    ax.set_ylim3d(space[1][0], space[1][1])
+    ax.set_zlim3d(space[2][0], space[2][1])
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+    plt.colorbar(ax.scatter3D(x_pos, y_pos, z_pos, c=deflection, cmap=colormap, s=s))
+    plt.show()
+
+
+color_map = plt.cm.get_cmap('viridis', 12)
+
+xScatter, yScatter, zScatter, dScatter = CalculateDeflections()
+plotDeflectionMap(xScatter, yScatter, zScatter, dScatter, color_map, 60)
