@@ -155,8 +155,37 @@ Visualisation(end_position, thetas)
 
 
 ####
-space = [[0.1, 0.9], [0.1, 0.9], [0.1, 0.9]]
-points_per_axis = 10
+space = [[-700, 700], [-700, 700], [-1100, -100]]
+points_per_axis = 100
+
+def JacobianTheta(x, y, z, theta1, theta2, theta3):
+    a = base_radius - 2 * end_platform_radius
+    b = end_platform_radius * math.sqrt(3) - math.sqrt(3)*base_radius / 2
+    c = end_platform_radius - 0.5 * base_radius
+    L = rf
+
+    b11 = L * ((y + a)*np.sin(theta1) - z * np.cos(theta1))
+    b22 = -L * ((math.sqrt(3)*(x+b)+y+c)*np.sin(theta2)+2*z*np.cos(theta2))
+    b33 = L * ((math.sqrt(3)*(x-b)-y-c)*np.sin(theta3)-2*z*np.cos(theta3))
+
+    J = np.diag([b11, b22, b33])
+
+    return J
+
+def JacobianZ(x, y, z, theta1, theta2, theta3):
+
+    a = base_radius - 2 * end_platform_radius
+    b = end_platform_radius * math.sqrt(3) - math.sqrt(3)*base_radius / 2
+    c = end_platform_radius - 0.5 * base_radius
+    L = rf
+
+    eq1 = np.hstack([x, y+a+L*np.cos(theta1), z+L*np.sin(theta1)])
+    eq2 = np.hstack([2 * (x + b) - math.sqrt(3) * L * np.cos(theta2), 2 * (y + c) - L * np.cos(theta2),
+                     2 * (z + L * np.sin(theta2))])
+    eq3 = np.hstack([2 * (x - b) + math.sqrt(3) * L * np.cos(theta3), 2 * (y + c) - L * np.cos(theta3),
+                     2 * (z + L * np.sin(theta3))])
+
+    return np.vstack([eq1, eq2, eq3])
 
 
 def CalculateDeflections():
@@ -173,12 +202,22 @@ def CalculateDeflections():
         for y in y_linSpace:
             for z in z_linSpace:
 
-                deflection = x + y + z
+                end_position = [x, y, z]
+                thetas = IK(end_position[0], end_position[1], end_position[2])
+                J_theta = JacobianTheta(end_position[0], end_position[1], end_position[2], thetas[0], thetas[1],
+                                        thetas[2])
+                J_z = JacobianZ(end_position[0], end_position[1], end_position[2], thetas[0], thetas[1], thetas[2])
+                J = np.dot(np.linalg.inv(J_theta), J_z)
+
+                m = np.sqrt(np.linalg.det(np.dot(J, np.transpose(J))))
+
+                if m < 0.001:
+                    continue
 
                 x_pos.append(x)
                 y_pos.append(y)
                 z_pos.append(z)
-                deflections.append(deflection)
+                deflections.append(m)
 
     return np.array(x_pos), np.array(y_pos), np.array(z_pos), np.array(deflections)
 
