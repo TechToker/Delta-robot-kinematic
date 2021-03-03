@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+
 
 def Rx(q):
     T = np.array([[1, 0, 0, 0],
@@ -49,7 +51,43 @@ def Tz(z):
     return T
 
 
-def VisualisationFK(q0, q1):
+rf = 300  # small link
+re = 800  # big link
+
+base_radius = 200  # radius of top platform
+end_platform_radius = 100  # radius of end-effector
+
+position = [0, -400, -600]
+
+def FixedIK(x0, y0, z0):
+    delta_radius = base_radius - end_platform_radius + y0
+
+    x = np.sqrt(z0**2 + delta_radius**2)
+    alpha = np.arctan2(abs(z0), delta_radius)
+    beta = np.pi - alpha
+    eta = np.arccos((rf**2 + x**2 - re**2) / (2 * rf * x))
+
+    print(f'Eta: {eta}')
+    print(f'Eta: {np.rad2deg(eta)}')
+
+    q1 = eta - beta
+
+    print(f'q1:{np.rad2deg(q1)}')
+
+    q2 = np.pi - np.arccos((rf**2 + re**2 - x**2) / (2 * rf * re))
+
+    #print(f'q2: {np.rad2deg(np.pi - np.arccos((rf**2 + re**2 - x**2) / (2 * rf * re)))}')
+
+    return [q1, q2]
+
+
+anw = FixedIK(position[0], position[1], position[2])
+thetas = [anw[0], 0, 0]
+
+ax = plt.axes(projection='3d')
+
+
+def RobotFK(ax, q0, q1, q2):
 
     T = np.linalg.multi_dot([Rz(q0),
                              Ty(-base_radius)])
@@ -58,38 +96,57 @@ def VisualisationFK(q0, q1):
 
     T = np.linalg.multi_dot([Rz(q0),
                              Ty(-base_radius),
-                             Rx(q1),
+                             Rx(-q1),
                              Ty(-rf)])
 
     pos2 = T[0:3, 3]
 
-    return pos1, pos2
+    T = np.linalg.multi_dot([Rz(q0),
+                             Ty(-base_radius),
+                             Rx(-q1),
+                             Ty(-rf),
+                             Rx(q2),
+                             Ty(-re)])
+
+    pos3 = T[0:3, 3]
+
+    x = [pos1[0], pos2[0], pos3[0]]
+    y = [pos1[1], pos2[1], pos3[1]]
+    z = [pos1[2], pos2[2], pos3[2]]
+
+    ax.plot3D(x, y, z)
+
+    ax.set_xlim(-500, 500)
+    ax.set_ylim(-500, 500)
+    ax.set_zlim(-1000, 0)
 
 
-def VisualisationFK_ee(ee_pos, q0):
+def DrawCircle(ax, pos, radius):
+    theta = np.linspace(0, 2 * np.pi, 200)
 
-    T = np.linalg.multi_dot([Tx(ee_pos[0]),
-                             Ty(ee_pos[1]),
-                             Tz(ee_pos[2]),
-                             Rz(q0),
-                             Ty(-end_platform_radius)])
+    x = radius * np.sin(theta) + pos[0]
+    y = radius * np.cos(theta) + pos[1]
 
-    pos1 = T[0:3, 3]
-    return pos1
+    ax.plot(x, y, pos[2])
 
+# Draw base
+DrawCircle(ax, [0, 0, 0], base_radius)
 
-re = 800  # big link
-rf = 300  # small link
-base_radius = 370  # radius of top platform
-end_platform_radius = 80  # radius of end-effector
+# Draw end-effector
+DrawCircle(ax, position, end_platform_radius)
 
+RobotFK(ax, 0, anw[0], anw[1])
+print("")
+print("New IK")
 
 def calc_angle(x0, y0, z0):
-    y1 = -0.5 * 0.57735 * base_radius
-    y0 -= 0.5 * 0.57735 * end_platform_radius
+    y1 = -0.5 * np.tan(np.pi/6) * base_radius
+    y0 -= 0.5 * np.tan(np.pi/6) * end_platform_radius
+
     a = (x0 * x0 + y0 * y0 + z0 * z0 + rf * rf - re * re - y1 * y1) / (2 * z0)
     b = (y1 - y0) / z0
     d = -(a + b * y1) * (a + b * y1) + rf * (b * b * rf + rf)
+
     if d < 0:
         print("The point doesnt exist")
 
@@ -97,9 +154,12 @@ def calc_angle(x0, y0, z0):
     zj = a + b * yj
 
     if yj > y1:
-        theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi + 180
+        theta = 180.0 * 2 * np.arctan(-zj / (y1 - yj)) / np.pi + 180
     else:
-        theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi
+        theta = 180.0 * 2 * np.arctan(-zj / (y1 - yj)) / np.pi
+
+    print(base_radius, yj)
+    print(f'New Pos2: {[0, - base_radius + yj, zj]}')
 
     return theta, [0, -base_radius + yj, zj]
 
@@ -115,80 +175,75 @@ def IK(x0, y0, z0):
     return [theta1, theta2, theta3]
 
 
-#print(IK(100, 300, -500))
+thetas = IK(position[0], position[1], position[2])
+print(f'New q1: {thetas[0]}')
 
 
-def FK(theta1, theta2, theta3):
-    tan30 = np.tan(np.deg2rad(30))
-    tan60 = np.tan(np.deg2rad(60))
-    sin30 = np.sin(np.deg2rad(30))
+def VisualisationFK(ax, q0, q1):
 
-    t = (base_radius - end_platform_radius) * tan30 / 2
-    dtr = np.pi / 180
+    T = np.linalg.multi_dot([Rz(q0),
+                             Ty(-base_radius)])
 
-    theta1 *= dtr
-    theta2 *= dtr
-    theta3 *= dtr
+    pos1 = T[0:3, 3]
 
-    y1 = -(t + rf * np.cos(theta1))
-    z1 = -rf * np.sin(theta1)
+    T = np.linalg.multi_dot([Rz(q0),
+                             Ty(-base_radius),
+                             Rx(q1),
+                             Ty(-rf)])
 
-    y2 = (t + rf * np.cos(theta2)) * sin30
-    x2 = y2 * tan60
-    z2 = -rf * np.sin(theta2)
+    pos2 = T[0:3, 3]
 
-    y3 = (t + rf * np.cos(theta3)) * sin30
-    x3 = -y3 * tan60
-    z3 = -rf * np.sin(theta3)
+    # ax.scatter(pos1[0], pos1[1], pos1[2])
+    # ax.scatter(pos2[0], pos2[1], pos2[2])
 
-    dnm = (y2 - y1) * x3 - (y3 - y1) * x2
-
-    w1 = y1 * y1 + z1 * z1
-    w2 = x2 * x2 + y2 * y2 + z2 * z2
-    w3 = x3 * x3 + y3 * y3 + z3 * z3
-
-    a1 = (z2 - z1) * (y3 - y1) - (z3 - z1) * (y2 - y1)
-    b1 = -((w2 - w1) * (y3 - y1) - (w3 - w1) * (y2 - y1)) / 2
-
-    a2 = -(z2 - z1) * x3 + (z3 - z1) * x2
-    b2 = ((w2 - w1) * x3 - (w3 - w1) * x2) / 2
-
-    a = a1 * a1 + a2 * a2 + dnm * dnm
-    b = 2 * (a1 * b1 + a2 * (b2 - y1 * dnm) - z1 * dnm * dnm)
-    c = (b2 - y1 * dnm) * (b2 - y1 * dnm) + b1 * b1 + dnm * dnm * (z1 * z1 - re * re)
-
-    d = b * b - 4 * a * c
-    if (d < 0):
-        print("error")
-
-    z0 = -0.5 * (b + np.sqrt(d)) / a
-    x0 = (a1 * z0 + b1) / dnm
-    y0 = (a2 * z0 + b2) / dnm
-    return [x0, y0, z0]
+    return pos1, pos2
 
 
-#print(FK(15, -65, -40))
+
+def VisualisationFK_ee(ax, ee_pos, q0):
+
+    T = np.linalg.multi_dot([Tx(ee_pos[0]),
+                             Ty(ee_pos[1]),
+                             Tz(ee_pos[2])])
+
+    pos0 = T[0:3, 3]
+
+    T = np.linalg.multi_dot([Tx(ee_pos[0]),
+                             Ty(ee_pos[1]),
+                             Tz(ee_pos[2]),
+                             Rz(q0),
+                             Ty(-end_platform_radius)])
+
+    pos1 = T[0:3, 3]
+
+    # ax.scatter(pos1[0], pos1[1], pos1[2])
+    # ax.scatter(pos0[0], pos0[1], pos0[2])
+
+    return pos0, pos1
 
 
-position = [-200, -400, -505]
-thetas= IK(position[0], position[1], position[2])
+def PlotLeg(ax, center, pos0, pos1, posEnd, posEe):
 
-#print(thetas)
+    # Sequence 1
+    x = [center[0], pos0[0], pos1[0]]  # , posEnd[0], ee_pos[0]]
+    y = [center[1], pos0[1], pos1[1]]  # , posEnd[1], ee_pos[1]]
+    z = [center[2], pos0[2], pos1[2]]  # , posEnd[2], ee_pos[2]]
+
+    ax.plot3D(x, y, z)
+
+    x = [posEnd[0], posEe[0]]
+    y = [posEnd[1], posEe[1]]
+    z = [posEnd[2], posEe[2]]
+
+    ax.plot3D(x, y, z)
 
 
-def DrawCircle(ax, pos, radius):
-    theta = np.linspace(0, 2 * np.pi, 200)
-
-    x = radius * np.sin(theta) + pos[0]
-    y = radius * np.cos(theta) + pos[1]
-
-    ax.plot(x, y, pos[2])
+def CalcDist(pos1, pos2):
+    return np.sqrt((pos2[0] - pos1[0])**2 + (pos2[1] - pos1[1])**2 + (pos2[2] - pos1[2])**2)
 
 
-import math
-
-def Visualisation(ee_pos, q):
-    ax = plt.axes(projection='3d')
+def Visualisation(ax, ee_pos, q):
+    #ax = plt.axes(projection='3d')
     center = [0, 0, 0]
 
     # Draw base
@@ -197,50 +252,45 @@ def Visualisation(ee_pos, q):
     # Draw end-effector
     DrawCircle(ax, ee_pos, end_platform_radius)
 
-    print(q)
-
     # Sequence 1
-    pos0, pos1 = VisualisationFK(0, np.deg2rad(q[0]))
+    # print(ax)
+    # print(np.deg2rad(q[0]))
 
-    x = [center[0], pos0[0], pos1[0], ee_pos[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], ee_pos[1] - end_platform_radius, ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], ee_pos[2], ee_pos[2]]
+    pos0, posElbow = VisualisationFK(ax, 0, np.deg2rad(q[0]))
+    posEndEffector, posWrist = VisualisationFK_ee(ax, ee_pos, np.deg2rad(0))
 
-    ax.plot3D(x, y, z)
+    PlotLeg(ax, center, pos0, posElbow, posEndEffector, posWrist)
 
-    # Sequence 2
-    pos0, pos1 = VisualisationFK(np.deg2rad(120), np.deg2rad(q[1]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(120))
+    ax.scatter(posElbow[0], posElbow[1], posElbow[2])
+    ax.scatter(posWrist[0], posWrist[1], posWrist[2])
 
-    print(posEnd)
+    print(f'Pos el{posElbow}')
+    print(f'Pos wr{posWrist}')
 
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
+    dst = math.dist(posWrist, posElbow)
+    print(f'Distance: {dst}')
 
-    ax.plot3D(x, y, z)
-
-    # Sequence 3
-    pos0, pos1 = VisualisationFK(np.deg2rad(-120), np.deg2rad(q[2]))
-    posEnd = VisualisationFK_ee(ee_pos, np.deg2rad(-120))
-
-    print(posEnd)
-
-    x = [center[0], pos0[0], pos1[0], posEnd[0], ee_pos[0]]
-    y = [center[1], pos0[1], pos1[1], posEnd[1], ee_pos[1]]
-    z = [center[2], pos0[2], pos1[2], posEnd[2], ee_pos[2]]
-
-    ax.plot3D(x, y, z)
-
-    print()
-
-    print(math.dist(pos1, pos0))
-    #print(math.dist(pos1, posEnd))
+    # # Sequence 2
+    # pos0, pos1 = VisualisationFK(ax, np.deg2rad(120), np.deg2rad(q[1]))
+    # posEnd, e_pos = VisualisationFK_ee(ax, ee_pos, np.deg2rad(120))
+    #
+    # PlotLeg(ax, center, pos0, pos1, posEnd, e_pos)
+    # #
+    # # dst1 = math.dist(posEnd, pos1)
+    # # print(dst1)
+    # #
+    # # Sequence 3
+    # pos0, pos1 = VisualisationFK(ax, np.deg2rad(-120), np.deg2rad(q[2]))
+    # posEnd, e_pos = VisualisationFK_ee(ax, ee_pos, np.deg2rad(-120))
+    #
+    # PlotLeg(ax, center, pos0, pos1, posEnd, e_pos)
+    #
+    # dst2 = math.dist(posEnd, pos1)
+    # print(dst2)
 
     ax.set_xlim(-500, 500)
     ax.set_ylim(-500, 500)
     ax.set_zlim(-1000, 0)
     plt.show()
 
-
-Visualisation(position, thetas)
+Visualisation(ax, position, thetas)
