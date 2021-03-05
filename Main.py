@@ -26,14 +26,17 @@ def GetActiveJointAngle(x0, y0, z0):
     zj = a + b * yj
 
     if yj > y1:
-        theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi + 180
+        theta = np.arctan(-zj / (y1 - yj)) + np.pi
     else:
-        theta = 180.0 * np.arctan(-zj / (y1 - yj)) / np.pi
+        theta = np.arctan(-zj / (y1 - yj))
 
     return theta
 
 
 def IK(x0, y0, z0):
+    r1 = rf
+    r2 = re
+
     cos120 = -0.5
     sin120 = np.sin(np.deg2rad(120))
 
@@ -41,7 +44,29 @@ def IK(x0, y0, z0):
     theta2 = GetActiveJointAngle(x0 * cos120 + y0 * sin120, y0 * cos120 - x0 * sin120, z0)
     theta3 = GetActiveJointAngle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
 
-    return [theta1, theta2, theta3]
+    alpha1 = np.arcsin(y0 / re)
+    alpha2 = np.arcsin(y0 * cos120 - x0 * sin120 / re)
+    alpha3 = np.arcsin(y0 * cos120 + x0 * sin120 / re)
+
+    q1 = [theta1, theta2, theta3]
+    q3 = [alpha1, alpha2, alpha3]
+
+    beta1 = np.arccos((-(r1 * np.cos(theta1) - x0) * np.cos(theta1) + np.sqrt(
+        -r1 ** 2 * np.cos(theta1) ** 2 + 2 * r1 * x0 * np.cos(theta1) + r2 ** 2 * np.cos(alpha1) ** 2 - x0 ** 2) * np.sin(theta1)) / (r2 * np.cos(alpha1)))
+
+    beta2 = np.arccos((-(r1 * np.cos(theta2) - (x0 * cos120 + y0 * sin120)) * np.cos(theta2) + np.sqrt(
+        -r1 ** 2 * np.cos(theta2) ** 2 + 2 * r1 * (x0 * cos120 + y0 * sin120) * np.cos(theta2) + r2 ** 2 * np.cos(alpha2) ** 2 - (x0 * cos120 + y0 * sin120) ** 2) * np.sin(theta2)) / (r2 * np.cos(alpha2)))
+
+    beta3 = np.arccos((-(r1 * np.cos(theta3) - (x0 * cos120 - y0 * sin120)) * np.cos(theta3) + np.sqrt(
+        -r1 ** 2 * np.cos(theta3) ** 2 + 2 * r1 * (x0 * cos120 - y0 * sin120) * np.cos(theta3) + r2 ** 2 * np.cos(alpha3) ** 2 - (x0 * cos120 - y0 * sin120) ** 2) * np.sin(theta3)) / (r2 * np.cos(alpha3)))
+
+    q2 = [beta1, beta2, beta3]
+
+    print(q1)
+    print(q2)
+    print(q3)
+
+    return q1, q2, q3
 
 
 def FK(theta1, theta2, theta3):
@@ -151,39 +176,30 @@ def Visualisation(ee_pos, q):
 
 thetas = IK(end_position[0], end_position[1], end_position[2])
 print(f'IK angles: {thetas}')
-Visualisation(end_position, thetas)
+#Visualisation(end_position, thetas)
 
 
 ####
-space = [[-700, 700], [-700, 700], [-1100, -100]]
-points_per_axis = 100
+space = [[-800, 800], [-800, 800], [-1100, -100]]
+points_per_axis = 20
 
-def JacobianTheta(x, y, z, theta1, theta2, theta3):
-    a = base_radius - 2 * end_platform_radius
-    b = end_platform_radius * math.sqrt(3) - math.sqrt(3)*base_radius / 2
-    c = end_platform_radius - 0.5 * base_radius
-    L = rf
+def JacobianTheta(q1, q2, q3):
 
-    b11 = L * ((y + a)*np.sin(theta1) - z * np.cos(theta1))
-    b22 = -L * ((math.sqrt(3)*(x+b)+y+c)*np.sin(theta2)+2*z*np.cos(theta2))
-    b33 = L * ((math.sqrt(3)*(x-b)-y-c)*np.sin(theta3)-2*z*np.cos(theta3))
+    r1 = rf
 
-    J = np.diag([b11, b22, b33])
+    eq1 = -r1 * (-np.sin(q1[0]) * np.cos(q1[0] + q2[0]) - np.cos(q1[0]) * np.sin(q1[0]+q2[0]))
+    eq2 = -r1 * (-np.sin(q1[1]) * np.cos(q1[1] + q2[1]) - np.cos(q1[1]) * np.sin(q1[1] + q2[1]))
+    eq3 = -r1 * (-np.sin(q1[2]) * np.cos(q1[2] + q2[2]) - np.cos(q1[2]) * np.sin(q1[2] + q2[2]))
+
+    J = np.diag([eq1, eq2, eq3])
 
     return J
 
-def JacobianZ(x, y, z, theta1, theta2, theta3):
+def JacobianZ(q1, q2, q3):
 
-    a = base_radius - 2 * end_platform_radius
-    b = end_platform_radius * math.sqrt(3) - math.sqrt(3)*base_radius / 2
-    c = end_platform_radius - 0.5 * base_radius
-    L = rf
-
-    eq1 = np.hstack([x, y+a+L*np.cos(theta1), z+L*np.sin(theta1)])
-    eq2 = np.hstack([2 * (x + b) - math.sqrt(3) * L * np.cos(theta2), 2 * (y + c) - L * np.cos(theta2),
-                     2 * (z + L * np.sin(theta2))])
-    eq3 = np.hstack([2 * (x - b) + math.sqrt(3) * L * np.cos(theta3), 2 * (y + c) - L * np.cos(theta3),
-                     2 * (z + L * np.sin(theta3))])
+    eq1 = np.hstack([-np.cos(q1[0] + q2[0]), -np.tan(q3[0]), np.sin(q1[0] + q2[0])])
+    eq2 = np.hstack([-np.cos(q1[1] + q2[1]), -np.tan(q3[1]), np.sin(q1[1] + q2[1])])
+    eq3 = np.hstack([-np.cos(q1[2] + q2[2]), -np.tan(q3[2]), np.sin(q1[2] + q2[2])])
 
     return np.vstack([eq1, eq2, eq3])
 
@@ -203,16 +219,14 @@ def CalculateDeflections():
             for z in z_linSpace:
 
                 end_position = [x, y, z]
-                thetas = IK(end_position[0], end_position[1], end_position[2])
-                J_theta = JacobianTheta(end_position[0], end_position[1], end_position[2], thetas[0], thetas[1],
-                                        thetas[2])
-                J_z = JacobianZ(end_position[0], end_position[1], end_position[2], thetas[0], thetas[1], thetas[2])
+                q1, q2, q3 = IK(end_position[0], end_position[1], end_position[2])
+                J_theta = JacobianTheta(q1, q2, q3)
+                J_z = JacobianZ(q1, q2, q3)
                 J = np.dot(np.linalg.inv(J_theta), J_z)
 
                 m = np.sqrt(np.linalg.det(np.dot(J, np.transpose(J))))
 
-                if m < 0.001:
-                    continue
+                print(m)
 
                 x_pos.append(x)
                 y_pos.append(y)
@@ -242,3 +256,14 @@ color_map = plt.cm.get_cmap('viridis', 12)
 
 xScatter, yScatter, zScatter, dScatter = CalculateDeflections()
 plotDeflectionMap(xScatter, yScatter, zScatter, dScatter, color_map, 60)
+
+r1 = 300
+r2 =800
+theta1 = 0.5
+alpha1 = 0.5
+x0 = 200
+beta5 = np.arccos((-(r1 * np.cos(theta1) - x0) * np.cos(theta1) + np.sqrt(
+    -r1 ** 2 * np.cos(theta1) ** 2 + 2 * r1 * x0 * np.cos(theta1) + r2 ** 2 * np.cos(alpha1) ** 2 - x0 ** 2) * np.sin(
+    theta1)) / (r2 * np.cos(alpha1)))
+
+print(beta5)
