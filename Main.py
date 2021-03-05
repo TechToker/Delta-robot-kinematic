@@ -19,8 +19,8 @@ def GetActiveJointAngle(x0, y0, z0):
     b = (y1 - y0) / z0
     d = -(a + b * y1) * (a + b * y1) + rf * (b * b * rf + rf)
 
-    if d < 0:
-        print("The point doesnt exist")
+    # if d < 0:
+    #     print("The point doesnt exist")
 
     yj = (y1 - a * b - np.sqrt(d)) / (b * b + 1)
     zj = a + b * yj
@@ -45,8 +45,8 @@ def IK(x0, y0, z0):
     theta3 = GetActiveJointAngle(x0 * cos120 - y0 * sin120, y0 * cos120 + x0 * sin120, z0)
 
     alpha1 = np.arcsin(y0 / re)
-    alpha2 = np.arcsin(y0 * cos120 - x0 * sin120 / re)
-    alpha3 = np.arcsin(y0 * cos120 + x0 * sin120 / re)
+    alpha2 = np.arcsin((y0 * cos120 - x0 * sin120) / re)
+    alpha3 = np.arcsin((y0 * cos120 + x0 * sin120) / re)
 
     q1 = [theta1, theta2, theta3]
     q3 = [alpha1, alpha2, alpha3]
@@ -61,10 +61,7 @@ def IK(x0, y0, z0):
         -r1 ** 2 * np.cos(theta3) ** 2 + 2 * r1 * (x0 * cos120 - y0 * sin120) * np.cos(theta3) + r2 ** 2 * np.cos(alpha3) ** 2 - (x0 * cos120 - y0 * sin120) ** 2) * np.sin(theta3)) / (r2 * np.cos(alpha3)))
 
     q2 = [beta1, beta2, beta3]
-
-    print(q1)
     print(q2)
-    print(q3)
 
     return q1, q2, q3
 
@@ -180,7 +177,7 @@ print(f'IK angles: {thetas}')
 
 
 ####
-space = [[-800, 800], [-800, 800], [-1100, -100]]
+space = [[-800, 800], [-800, 800], [-1200, -100]]
 points_per_axis = 20
 
 def JacobianTheta(q1, q2, q3):
@@ -227,6 +224,8 @@ def CalculateDeflections():
                 m = np.sqrt(np.linalg.det(np.dot(J, np.transpose(J))))
 
                 print(m)
+                if m > 0.0000001:
+                    continue
 
                 x_pos.append(x)
                 y_pos.append(y)
@@ -255,15 +254,15 @@ def plotDeflectionMap(x_pos, y_pos, z_pos, deflection, colormap, s):
 color_map = plt.cm.get_cmap('viridis', 12)
 
 xScatter, yScatter, zScatter, dScatter = CalculateDeflections()
-plotDeflectionMap(xScatter, yScatter, zScatter, dScatter, color_map, 60)
+plotDeflectionMap(xScatter, yScatter, zScatter, dScatter, color_map, 20)
 
 r1 = 300
-r2 =800
+r2 = 800
 theta1 = 0.5
 alpha1 = 0.5
 x0 = 200
 beta5 = np.arccos((-(r1 * np.cos(theta1) - x0) * np.cos(theta1) + np.sqrt(
     -r1 ** 2 * np.cos(theta1) ** 2 + 2 * r1 * x0 * np.cos(theta1) + r2 ** 2 * np.cos(alpha1) ** 2 - x0 ** 2) * np.sin(
     theta1)) / (r2 * np.cos(alpha1)))
-
-print(beta5)
+#
+# print(beta5)
