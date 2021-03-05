@@ -173,7 +173,7 @@ def Visualisation(ee_pos, q):
 
 thetas = IK(end_position[0], end_position[1], end_position[2])
 print(f'IK angles: {thetas}')
-#Visualisation(end_position, thetas)
+Visualisation(end_position, [theta[0] for theta in thetas])
 
 
 ####
@@ -224,8 +224,8 @@ def CalculateDeflections():
                 m = np.sqrt(np.linalg.det(np.dot(J, np.transpose(J))))
 
                 print(m)
-                if m > 0.0000001:
-                    continue
+                if m < 0.00000005:
+                    m = -1
 
                 x_pos.append(x)
                 y_pos.append(y)
